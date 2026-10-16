@@ -88,6 +88,34 @@ class BudgetTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             run(Config(pairs=1, repetitions=2), Resumed(), target, resume=True)
 
+    def test_empty_existing_ledger_cannot_reset_budget(self):
+        budget = Budget(self.path, max_requests=1)
+        budget.reserve("spent", "hello")
+        self.path.write_text("")  # Simulate an empty damaged ledger.
+        with self.assertRaises(BudgetError):
+            Budget(self.path, max_requests=1)
+        with self.assertRaises(BudgetError):
+            budget.reserve("retry", "hello")
+
+    def test_auth_usage_is_terminal_even_if_stop_append_is_interrupted(self):
+        for status in (401, 403):
+            with self.subTest(status=status):
+                path = Path(self.tmp.name) / f"auth-{status}.jsonl"
+                budget = Budget(path)
+                identifier = budget.reserve("first", "hello")
+                original = budget.append
+
+                def interrupted(stream, record):
+                    if record["kind"] == "terminal":
+                        raise KeyboardInterrupt()
+                    return original(stream, record)
+
+                budget.append = interrupted
+                with self.assertRaises(KeyboardInterrupt):
+                    budget.finish(identifier, http_status=status)
+                with self.assertRaises(BudgetError):
+                    Budget(path).reserve("after-restart", "hello")
+
     def test_resume_requires_original_budget(self):
         class Bound(Oracle):
             def bind_budget(self, directory):

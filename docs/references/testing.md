@@ -58,5 +58,6 @@ only with explicit --allow-live and authorized credentials. Never label a mock/o
 ## Known Gaps
 
 Live model baseline: BLOCKED by HTTP 401 authentication failure. AWS verification: BLOCKED on
-exact target. Python 3.11–3.13 CI runtime: PENDING until GitHub runs. No production
+exact target. Python 3.11–3.13 hosted CI passed on PR #1 head 3738712;
+any subsequent head must pass its own run before merge. No production
 validation is applicable. Tiny-case bootstrap intervals do not establish equivalence.

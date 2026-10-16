@@ -51,19 +51,28 @@ class Budget:
                        "input_usd_per_million": str(PRICES[model][0]),
                        "output_usd_per_million": str(PRICES[model][1]),
                        "pricing_source": PRICING_URL, "pricing_verified": "2026-10-16"}
+        try:
+            descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            created = False
+        else:
+            os.close(descriptor)
+            created = True
         with locked_file(self.path) as stream:
-            records = self.read(stream)
+            records = self.read(stream, allow_empty=created)
             if not records:
                 self.append(stream, self.policy)
             elif records[0] != self.policy:
                 raise BudgetError("existing budget policy differs; refusing reset")
 
-    def read(self, stream):
+    def read(self, stream, allow_empty=False):
         stream.seek(0)
         try:
             records = [json.loads(line) for line in stream]
         except (ValueError, TypeError):
             raise BudgetError("budget ledger is damaged; fail closed") from None
+        if not records and not allow_empty:
+            raise BudgetError("existing budget ledger is empty; refusing reset")
         if records and records[0] != self.policy:
             raise BudgetError("existing budget policy differs; refusing reset")
         return records
@@ -84,7 +93,8 @@ class Budget:
         cost = math.ceil(input_tokens * input_rate + self.policy["output_cap"] * output_rate)
         with locked_file(self.path) as stream:
             records = self.read(stream)
-            if any(record.get("kind") == "terminal" for record in records):
+            if any(record.get("kind") == "terminal" or record.get("http_status") in (401, 403)
+                   for record in records):
                 raise BudgetError("pilot stopped after terminal authentication error")
             reservations = [r for r in records if r.get("kind") == "reservation"]
             if len(reservations) >= self.policy["max_requests"]:
