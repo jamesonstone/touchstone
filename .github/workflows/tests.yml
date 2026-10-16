@@ -1,0 +1,27 @@
+name: Deterministic tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: make test
+      - name: Oracle integration (no paid API calls)
+        run: python3 -m touchstone oracle --out tmp/ci-oracle
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oracle-${{ matrix.python }}
+          path: tmp/ci-oracle/
+          retention-days: 7

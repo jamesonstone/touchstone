@@ -1,0 +1,16 @@
+# Kit local generated environment, cache, and scratch artifacts
+.env
+.envrc
+.kit/cache/
+.kit/tmp/
+.kit/temp/
+.kit/*.tmp
+.kit/*.lock
+
+# Experiment evidence and Python caches
+.env.*
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+tmp/

@@ -1,0 +1,16 @@
+# Run status — 2026-10-16
+
+- PASS: 12 native unittest tests, including solver/scorer enumeration over 80 cases.
+- PASS: 24-attempt oracle integration, four unique cases, three wordings, two repeats.
+  Each condition completed 8/8 (four feasible, four infeasible); this is plumbing
+  evidence only, not a model score. Local evidence: tmp/2026-10-16/oracle-1/.
+- PASS: kit check --project; kit check --all.
+- PASS: final make check after documentation updates (system Python 3.9.6).
+- PASS: make check with Homebrew Python 3.13 and oracle CLI on Python 3.13.
+- PENDING: GitHub Actions runtime on Python 3.11–3.13.
+- BLOCKED: genuine model pilot; credential reuse-versus-new choice pending.
+- BLOCKED: AWS identity; exact profile foundary-dev absent, account/region UNKNOWN.
+
+Oracle interval [1, 1] and paired differences 0 are deterministic reference behavior.
+They are not empirical evidence of language-model equivalence. Raw ignored run
+artifacts remain on this Mac. No secrets, real user inputs, or customer data were used.
