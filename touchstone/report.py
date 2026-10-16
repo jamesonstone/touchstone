@@ -24,6 +24,11 @@ def cluster_interval(values, seed=12345, samples=4000):
 
 
 def summary(manifest, rows):
+    model_rows = [r for r in rows if r["response"].get("returned_model")
+                  and r["response"].get("output")]
+    usages = [r["response"]["usage"] for r in rows if r["response"].get("usage") is not None]
+    usage = ({key: sum(u.get(key, 0) for u in usages)
+              for key in ("input_tokens", "output_tokens", "total_tokens")} if usages else None)
     conditions = {}
     rates = {}
     for variant in VARIANTS:
@@ -61,6 +66,12 @@ def summary(manifest, rows):
     return {
         "benchmark": manifest["benchmark"], "measured_model": manifest["provider"]["measured_model"],
         "planned_trials": manifest["trial_count"], "recorded_trials": len(rows),
+        "observed_model_outputs": len(model_rows),
+        "attempted_requests": sum(r["response"].get("request_attempted", True) for r in rows),
+        "baseline_status": ("BLOCKED_NO_MODEL_OUTPUT" if manifest["provider"]["measured_model"]
+                            and not model_rows else "RECORDED"),
+        "usage": usage, "usage_reported_trials": len(usages),
+        "total_latency_seconds": sum(r["latency_seconds"] for r in rows),
         "conditions": conditions, "paired": paired,
         "uncertainty": "Percentile case-cluster bootstrap, 4000 draws, seed 12345. "
         "Repeats are not independent cases. Tiny samples and degenerate intervals "
@@ -69,9 +80,11 @@ def summary(manifest, rows):
 
 
 def markdown(report):
-    kind = "Model pilot" if report["measured_model"] else "Oracle plumbing test (not a model baseline)"
+    kind = ("Failed model-access pilot (no measured model baseline)"
+            if report["baseline_status"] == "BLOCKED_NO_MODEL_OUTPUT" else
+            "Model pilot" if report["measured_model"] else "Oracle plumbing test (not a model baseline)")
     lines = [f"# {kind}", "", f"Benchmark: `{report['benchmark']}`.", "",
-             "| Wording | Completed / attempts | Unique cases | Case-bootstrap 95% interval |",
+             "| Wording | Completed / planned trials | Unique cases | Case-bootstrap 95% interval |",
              "| --- | --- | --- | --- |"]
     for name, condition in report["conditions"].items():
         lines.append(f"| {name} | {condition['valid_completions']} / {condition['denominator']} | "
@@ -81,7 +94,9 @@ def markdown(report):
         lines.append(f"- {name}: {paired['completion_delta_vs_control']}; "
                      f"95% interval {paired['paired_case_bootstrap_95']}; "
                      f"{paired['unique_case_pairs']} paired cases.")
-    lines.extend(["", "See report.json for every outcome count and feasibility denominator.",
+    lines.extend(["", f"Observed model outputs: {report['observed_model_outputs']}; token usage: {report['usage']}.",
+                  "Zero completions caused entirely by provider errors do not measure model ability.",
+                  "See report.json for every outcome count and feasibility denominator.",
                   "All planned attempts, including provider errors, remain in the denominator.",
                   "No overall score combines unrelated benchmarks.", ""])
     return "\n".join(lines)

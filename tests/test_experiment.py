@@ -56,7 +56,7 @@ class ExperimentTests(unittest.TestCase):
     def test_provider_failures_do_not_leak_or_disappear(self):
         class Broken:
             provenance = {"provider": "test", "model": "test", "settings": {},
-                          "measured_model": False}
+                          "measured_model": True}
 
             def complete(self, trial, case):
                 raise RuntimeError("secret-like message must not be logged")
@@ -66,6 +66,9 @@ class ExperimentTests(unittest.TestCase):
             self.assertEqual(len(rows), 6)
             self.assertNotIn("secret-like", canonical(rows))
             report = summary(manifest, rows)
+            self.assertEqual(report["baseline_status"], "BLOCKED_NO_MODEL_OUTPUT")
+            self.assertIsNone(report["usage"])
+            self.assertIn("no measured model baseline", markdown(report))
             for condition in report["conditions"].values():
                 self.assertEqual(condition["denominator"], 2)
                 self.assertEqual(condition["valid_completions"], 0)

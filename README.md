@@ -25,7 +25,7 @@ order; requests are independent, with no conversation history.
 
 ## Run locally
 
-Requires Python 3.11 or later, Git, and Make. No Python dependencies or paid API calls
+Requires macOS or Linux, Python 3.11 or later, Git, and Make. No Python dependencies or paid API calls
 are required for deterministic validation. Kit is needed for project contract checks.
 
 ```sh
@@ -36,7 +36,9 @@ python3 -m touchstone plan --out /tmp/touchstone-plan.json
 python3 -m touchstone oracle --out tmp/my-oracle-run
 ```
 
-Output paths must be new. Runs never overwrite previous evidence. The default
+New runs require new output paths. Explicit `--resume` appends only missing trials
+after verifying the same configuration, plan and source hashes. It never resets
+the original budget. Partial/corrupt evidence fails closed. The default
 `configs/pilot.json` defines 24 attempts: two feasible/infeasible case pairs,
 three wording conditions, and two repetitions. Configuration keys are `seed`,
 `pairs`, `repetitions`, and `order_seed`. Cases and repetitions are bounded to
@@ -44,8 +46,8 @@ three wording conditions, and two repetitions. Configuration keys are `seed`,
 
 The oracle command validates the harness with a reference solver. **It is not a
 measured model baseline.** The plan command exports prompts for inspection without
-making a model request. No live API adapter is enabled in this first offline pass:
-the credential choice is pending. A provider adapter can implement
+making a model request. The bounded OpenAI adapter is enabled only by an explicit
+`--allow-live` flag. A provider adapter can implement
 `complete(trial, case)` and expose `provenance`; see `touchstone/experiment.py`.
 For model adapters, use only `trial["prompt"]` as model input; the case and feasibility
 metadata belong to the offline scorer and must never be sent as hidden hints.
@@ -96,18 +98,65 @@ Broader generators and a preregistered larger sample are future experiments.
 
 The runner records each request as attempted. It has no automatic retries. An
 interrupted run may have fewer rows than planned; preserve that evidence and start
-another run in a new directory. The CLI emits reports only after a complete run.
+another run in a new directory. The CLI emits reports only after the planned rows are complete. A later explicit
+resume can fill missing rows within the original limits; damaged evidence is rejected.
 
 ## Live pilot status and safety
 
-A genuine model baseline has **not run**. An ambient OpenAI key is present, but the
-required reuse-versus-new credential decision is pending. Do not infer that the
-oracle scores measure a language model. Proposed pilot scope: 24 requests, one
-explicit model snapshot, one explicit settings configuration, no retries, synthetic
-prompts only, and a reviewed output-token/cost cap before invocation. Cost is UNKNOWN
-until model and provider are selected. Provenance must record the requested model,
-returned model/version when available, endpoint/provider, every sampling setting,
-output cap, and token usage. Never record credential values or request headers.
+The first live-access attempt is **BLOCKED by authentication**. Reusing the existing
+OpenAI key was explicitly approved. The bounded 24-request pilot reached the official
+API, but all 24 responses were HTTP 401. No model output or token usage was returned;
+this is not a model performance baseline. Credentials were not printed, persisted,
+rotated or uploaded. See `tests/RUN_STATUS.md` for the retained evidence location.
+
+The adapter fixes the historical snapshot `gpt-4.1-mini-2025-04-14`, temperature 0.7,
+top-p 1, 384 output tokens, plain text output, no tools/history/retries, `store=false`,
+30-second timeout, fixed official HTTPS endpoint and no redirects. The historical
+snapshot is marked deprecated in current documentation; availability/access is not
+established because authentication failed first. Input is limited to 4,096 UTF-8
+bytes per prompt and at most 24 requests per process. At the documented $0.40/M input
+and $1.60/M output token rates, a conservative byte-based input allowance plus 1,024
+overhead tokens/request gives a maximum reservation below $0.064 for 24 full-size
+requests. The default budget is $0.10; this excludes taxes or pricing changes. [Official model and pricing documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
+
+After a valid existing credential is available in the environment, an explicitly
+approved pilot can be run with:
+
+```sh
+python3 -m touchstone openai --allow-live --out tmp/new-openai-run
+# Resume only that same pilot and its original ledger:
+python3 -m touchstone openai --allow-live --resume --out tmp/new-openai-run
+```
+
+The CLI rejects larger plans before any request. `--budget-cents` defaults to 10
+and accepts only 1–100; a lower budget can stop a run early. Only the explicitly
+priced snapshot is enabled. Unknown model prices are rejected. Prices were verified
+against official documentation on 2026-10-16; revalidate them before future use.
+
+Every request first appends and fsyncs a worst-case reservation to `budget.jsonl`:
+UTF-8 prompt bytes plus 1,024 overhead tokens at the full input rate, plus the full
+output-token cap. Integer microdollar rounding is conservative. Cached-input savings
+are ignored. Usage is recorded, but reservations are never refunded, including lost
+responses and interrupted calls. Resume retains all reservations and the same limits.
+Retries are disabled; repeating an interrupted trial consumes another reservation
+and request slot. A per-run process lock and a ledger lock prevent simultaneous
+writers to the same pilot. Authentication stops persist across process restarts.
+
+**These are local estimated limits, not a hard cap on the API key.** Other programs,
+concurrent pilots in different directories, manually modified/deleted ledgers, price
+changes, taxes, or server-side billing differences are outside this enforcement.
+Each separately launched pilot gets its own budget; repeated launches accumulate
+spend. Do not share this key with uncontrolled clients. No key-level spending cap
+has been configured or verified. Following a terminal HTTP 401 or
+403, the adapter now stops further network calls and records remaining planned trials
+as provider errors with `request_attempted=false`. The first failed pilot predates
+that stop rule and actually sent all 24 requests. No live request was repeated after
+the failure. A new key or changed credential requires separate approval.
+
+Returned model/version, response/request IDs, usage and status are retained when
+available. Never record credential values or request headers. Authentication-only
+reports explicitly say `BLOCKED_NO_MODEL_OUTPUT`; zeros and bootstrap intervals in
+such a report describe pipeline completion, never measured model ability.
 
 The exact requested AWS location is `foundary-dev`. That profile is absent locally;
 `foundry-dev` exists but is not an approved substitute. AWS account and region are
@@ -128,7 +177,9 @@ local validation.
 See `docs/references/testing.md`, `tests/RUN_STATUS.md`, and the feature spec at
 `docs/specs/0001-constraint-wording/SPEC.md` for observed validation and known gaps.
 The task-specific user instructions authorize work in the existing clone with no
-worktree, no tracking issue, and a PR without merge; canonical Kit rules remain intact.
+worktree or tracking issue. Fresh approval covers committing, pushing, opening a PR
+and merging only after correctness review and required checks. Canonical Kit rules
+remain intact.
 
 ## Maintainers
 

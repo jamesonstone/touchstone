@@ -18,7 +18,8 @@ duplicate keys, schema and type errors, every outcome and refusal/error controls
 
 Run `python3 -m touchstone oracle --out tmp/<UTC-date>/oracle-<number>`.
 This validates full evidence generation and reporting; it is an oracle plumbing test,
-not a measured model baseline. Run paths must not exist. CI runs the same command
+not a measured model baseline. New run paths must not exist; --resume verifies the original plan/configuration/source
+and budget, then appends only missing trials. CI runs the same command
 under `tmp/ci-oracle` and uploads oracle artifacts for seven days.
 
 ## Environment Preflights
@@ -31,11 +32,15 @@ Never substitute foundry-dev. Configure verified Kit AWS context before any AWS 
 
 ## Credentials And Test Data
 
-Only synthetic scheduling inputs are used. OPENAI_API_KEY presence was checked
-without reading its value. Reuse versus creation is PENDING, so no live API adapter
-or model call is authorized yet. Proposed live pilot: 24 independent requests on
-one selected model/settings configuration, no retries, reviewed token/cost bounds.
-Cost remains UNKNOWN until model choice. No secret values belong in source or evidence.
+Only synthetic scheduling inputs are used. Existing OPENAI_API_KEY reuse was approved. The bounded historical OpenAI adapter
+was exercised for 24 requests; all returned HTTP 401, with no model outputs or token
+usage. Credentials were used in memory only. The model is fixed to
+gpt-4.1-mini-2025-04-14, temperature 0.7, top-p 1, max_output_tokens 384, no tools,
+no history, store=false and no retries. Default local budget is $0.10 (CLI maximum $1), reserving worst-case costs
+before every request using verified pricing. Unknown prices fail closed. Persistent
+reservations survive restart and are never refunded; retries default to zero.
+Tests cover interrupted requests, concurrency locks, corrupted/missing ledgers and
+authentication stops. This is not a key-level spending cap. No secret values belong in source or evidence.
 
 ## Evidence And Retention
 
@@ -48,10 +53,10 @@ Provider usage is null when unavailable. Errors stay in planned denominators.
 
 GitHub Actions uses no provider credentials and no paid model calls. Kit checks run
 locally; the workflow does not download an unpinned Kit binary. A live pilot is manual
-only after credential and model/cost decisions. Never label a mock/oracle as baseline.
+only with explicit --allow-live and authorized credentials. Never label a mock/oracle as baseline.
 
 ## Known Gaps
 
-Live model baseline: BLOCKED on credential choice. AWS verification: BLOCKED on
+Live model baseline: BLOCKED by HTTP 401 authentication failure. AWS verification: BLOCKED on
 exact target. Python 3.11–3.13 CI runtime: PENDING until GitHub runs. No production
 validation is applicable. Tiny-case bootstrap intervals do not establish equivalence.
