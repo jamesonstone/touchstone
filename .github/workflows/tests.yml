@@ -25,3 +25,25 @@ jobs:
           name: oracle-${{ matrix.python }}
           path: tmp/ci-oracle/
           retention-days: 7
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install clean package (no runtime dependencies)
+        run: python -m pip install --no-deps .
+      - name: Run installed CLI outside checkout
+        working-directory: ${{ runner.temp }}
+        run: touchstone oracle --out installed-oracle
+      - name: Verify deterministic demo artifacts
+        run: |
+          touchstone demo --out "$RUNNER_TEMP/demo"
+          diff -r results "$RUNNER_TEMP/demo"
+      - name: Verify equivalent container execution (offline only)
+        run: |
+          docker build -t touchstone-ci .
+          mkdir -p "$RUNNER_TEMP/container"
+          docker run --rm -v "$RUNNER_TEMP/container:/runs" touchstone-ci demo --out /runs/demo
+          diff -r results "$RUNNER_TEMP/container/demo"

@@ -5,12 +5,16 @@ import fcntl
 import json
 import math
 import os
+import uuid
 from pathlib import Path
 
 MODEL = "gpt-4.1-mini-2025-04-14"
-# Standard text rates, USD per million tokens, verified in official docs 2026-10-16.
-PRICES = {MODEL: (Fraction(2, 5), Fraction(8, 5))}
+# Standard text rates, USD per million tokens, verified in official docs 2026-10-18.
+PRICES = {MODEL: (Fraction(2, 5), Fraction(8, 5)),
+          "claude-haiku-4-5-20251001": (Fraction(1), Fraction(5))}
 PRICING_URL = "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+PRICING_SOURCES = {MODEL: PRICING_URL, "claude-haiku-4-5-20251001":
+                   "https://platform.claude.com/docs/en/about-claude/pricing"}
 OVERHEAD_TOKENS = 1024
 
 
@@ -33,11 +37,11 @@ def locked_file(path):
 
 
 class Budget:
-    def __init__(self, path, model=MODEL, budget_cents=10, max_requests=24, output_cap=384):
+    def __init__(self, path, model=MODEL, budget_cents=10, max_requests=24, output_cap=384, aggregate=False):
         if model not in PRICES:
             raise BudgetError("model has no verified price")
-        if type(budget_cents) is not int or not 1 <= budget_cents <= 100:
-            raise BudgetError("pilot budget must be 1–100 cents")
+        if type(budget_cents) is not int or not 1 <= budget_cents <= 500:
+            raise BudgetError("pilot budget must be 1–500 cents")
         if type(max_requests) is not int or not 1 <= max_requests <= 24:
             raise BudgetError("pilot request cap must be 1–24")
         if type(output_cap) is not int or not 1 <= output_cap <= 384:
@@ -50,7 +54,11 @@ class Budget:
                        "input_overhead_tokens": OVERHEAD_TOKENS,
                        "input_usd_per_million": str(PRICES[model][0]),
                        "output_usd_per_million": str(PRICES[model][1]),
-                       "pricing_source": PRICING_URL, "pricing_verified": "2026-10-16"}
+                       "pricing_source": PRICING_SOURCES[model], "pricing_verified": "2026-10-18"}
+        if aggregate:
+            self.policy.update(model="shared-priced-models-v1", input_usd_per_million=None,
+                               output_usd_per_million=None, pricing_source=PRICING_SOURCES,
+                               model_prices={k: [str(v) for v in rates] for k, rates in PRICES.items()})
         try:
             descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
@@ -61,9 +69,10 @@ class Budget:
         with locked_file(self.path) as stream:
             records = self.read(stream, allow_empty=created)
             if not records:
-                self.append(stream, self.policy)
-            elif records[0] != self.policy:
-                raise BudgetError("existing budget policy differs; refusing reset")
+                self.identity = str(uuid.uuid4())
+                self.append(stream, dict(self.policy, ledger_id=self.identity))
+            else:
+                self.identity = records[0]["ledger_id"]
 
     def read(self, stream, allow_empty=False):
         stream.seek(0)
@@ -73,8 +82,19 @@ class Budget:
             raise BudgetError("budget ledger is damaged; fail closed") from None
         if not records and not allow_empty:
             raise BudgetError("existing budget ledger is empty; refusing reset")
-        if records and records[0] != self.policy:
-            raise BudgetError("existing budget policy differs; refusing reset")
+        if records:
+            if not isinstance(records[0], dict):
+                raise BudgetError("budget policy is damaged")
+            stored = {k: v for k, v in records[0].items() if k != "ledger_id"}
+            if stored != self.policy:
+                raise BudgetError("existing budget policy differs; refusing reset")
+            identity = records[0].get("ledger_id")
+            try:
+                uuid.UUID(identity)
+            except (ValueError, TypeError, AttributeError):
+                raise BudgetError("budget ledger identity missing or damaged") from None
+            if identity != getattr(self, "identity", identity):
+                raise BudgetError("budget ledger identity changed")
         return records
 
     @staticmethod
@@ -103,7 +123,7 @@ class Budget:
                 raise BudgetError("insufficient remaining worst-case budget")
             identifier = len(reservations)
             self.append(stream, {"kind": "reservation", "id": identifier, "trial_id": trial_id,
-                                 "input_token_bound": input_tokens,
+                                 "input_token_bound": input_tokens, "model": self.model,
                                  "reserved_micro_usd": cost})
             return identifier
 

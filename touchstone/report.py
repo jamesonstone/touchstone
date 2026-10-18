@@ -71,7 +71,8 @@ def summary(manifest, rows):
         "baseline_status": ("BLOCKED_NO_MODEL_OUTPUT" if manifest["provider"]["measured_model"]
                             and not model_rows else "RECORDED"),
         "usage": usage, "usage_reported_trials": len(usages),
-        "total_latency_seconds": sum(r["latency_seconds"] for r in rows),
+        "total_latency_seconds": (sum(r["latency_seconds"] for r in rows if r["latency_seconds"] is not None)
+                                  if any(r["latency_seconds"] is not None for r in rows) else None),
         "conditions": conditions, "paired": paired,
         "uncertainty": "Percentile case-cluster bootstrap, 4000 draws, seed 12345. "
         "Repeats are not independent cases. Tiny samples and degenerate intervals "

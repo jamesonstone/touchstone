@@ -1,4 +1,20 @@
-# Run status — 2026-10-16
+# Portable refactor status — 2026-10-18
+
+- PASS: 32 deterministic tests and both Kit checks on Python 3.13.
+- PASS: clean virtual-environment package install; installed CLI outside checkout.
+- PASS: local Docker build and offline demo; artifacts match source demo byte-for-byte.
+- PASS: SVG rendered and visually inspected; oracle-demo label is prominent.
+- PASS: tests cover Anthropic request schema/headers/usage, no-live opt-in, shared
+  budget accounting across models, and resume rejection of substituted ledgers.
+- PASS: independent re-review confirmed ledger substitution fix; reviewer ran all 32 tests.
+- PENDING: final hosted CI for draft PR. Fresh explicit user approval resolves
+  the prior publication restriction; no merge is authorized.
+- BLOCKED: genuine baseline; secure OpenAI key setup is parent-owned and pending.
+  Seven saved runs were inspected: six oracle runs and one failed OpenAI attempt;
+  zero actual model outputs. No live calls were made during the refactor.
+- BLOCKED: Anthropic API key absent; organization-linked API credits not verified.
+
+## Historical validation — 2026-10-16
 
 - PASS: 26 native unittest tests, including solver/scorer enumeration over 80 cases.
 - PASS: 24-attempt oracle integration, four unique cases, three wordings, two repeats.

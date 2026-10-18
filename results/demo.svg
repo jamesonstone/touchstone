@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="340" viewBox="0 0 860 340" role="img" aria-labelledby="title desc">
+<title id="title">ORACLE DEMO — NOT MODEL RESULTS</title>
+<desc id="desc">Completed tasks by wording, with planned trial denominators. Oracle fixtures are not measured model scores.</desc>
+<rect width="860" height="340" rx="16" fill="#111827"/>
+<g font-family="Arial, sans-serif" fill="#f9fafb">
+<text x="28" y="42" font-size="22" font-weight="bold">ORACLE DEMO — NOT MODEL RESULTS</text>
+<text x="28" y="70" font-size="14" fill="#cbd5e1">Capacity scheduling · same cases across three wording conditions</text>
+<text x="28" y="128" font-size="16">control</text>
+<rect x="170" y="108" width="400" height="28" rx="4" fill="#475569"/>
+<rect x="170" y="108" width="400" height="28" rx="4" fill="#34d399"/>
+<text x="590" y="128" font-size="16">8 / 8 complete · 0 errors</text>
+<text x="28" y="186" font-size="16">invariant</text>
+<rect x="170" y="166" width="400" height="28" rx="4" fill="#475569"/>
+<rect x="170" y="166" width="400" height="28" rx="4" fill="#34d399"/>
+<text x="590" y="186" font-size="16">8 / 8 complete · 0 errors</text>
+<text x="28" y="244" font-size="16">never_break</text>
+<rect x="170" y="224" width="400" height="28" rx="4" fill="#475569"/>
+<rect x="170" y="224" width="400" height="28" rx="4" fill="#34d399"/>
+<text x="590" y="244" font-size="16">8 / 8 complete · 0 errors</text>
+<text x="28" y="300" font-size="14" fill="#cbd5e1">Reference-solver fixture only. No language-model inference or equivalence claim.</text>
+<text x="28" y="322" font-size="12" fill="#94a3b8">Green: valid completion. Gray: remaining planned trials, including failures and abstentions.</text>
+</g></svg>

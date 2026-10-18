@@ -44,7 +44,7 @@ class BudgetTests(unittest.TestCase):
             Budget(self.path).reserve("remaining", "hello")
 
     def test_unknown_price_and_excessive_bounds_rejected(self):
-        for kwargs in ({"model": "unpriced-model"}, {"budget_cents": 101},
+        for kwargs in ({"model": "unpriced-model"}, {"budget_cents": 501},
                        {"budget_cents": 0}, {"max_requests": 25}, {"output_cap": 385}):
             with self.subTest(kwargs=kwargs), self.assertRaises(BudgetError):
                 Budget(self.path, **kwargs)
@@ -115,6 +115,47 @@ class BudgetTests(unittest.TestCase):
                     budget.finish(identifier, http_status=status)
                 with self.assertRaises(BudgetError):
                     Budget(path).reserve("after-restart", "hello")
+
+    def test_shared_effort_budget_across_models_and_run_directories(self):
+        first = Budget(self.path, budget_cents=1, aggregate=True)
+        first.reserve("openai-run/0", "hello")
+        second = Budget(self.path, model="claude-haiku-4-5-20251001", budget_cents=1, aggregate=True)
+        second.reserve("anthropic-run/0", "hello")
+        with self.assertRaises(BudgetError):
+            second.reserve("anthropic-run/1", "x" * 4096)
+        records = [json.loads(s) for s in self.path.read_text().splitlines()]
+        self.assertEqual(len([r for r in records if r["kind"] == "reservation"]), 2)
+        with self.assertRaises(BudgetError):
+            Budget(self.path, budget_cents=500, aggregate=True)
+
+    def test_resume_rejects_substituted_ledger_but_allows_original_moved(self):
+        original = Path(self.tmp.name) / "effort.jsonl"
+        target = Path(self.tmp.name) / "run"
+
+        class Interrupted(Oracle):
+            def __init__(self, path):
+                self.path = path
+
+            def budget_path(self, directory):
+                return self.path
+
+            def bind_budget(self, directory):
+                self.budget = Budget(self.path, max_requests=1)
+
+            def complete(self, trial, case):
+                self.budget.reserve(trial["trial_id"], trial["prompt"])
+                raise KeyboardInterrupt()
+
+        with self.assertRaises(KeyboardInterrupt):
+            run(Config(pairs=1, repetitions=1), Interrupted(original), target)
+        different = Path(self.tmp.name) / "different.jsonl"
+        Budget(different, max_requests=1)
+        with self.assertRaises(ValueError):
+            run(Config(pairs=1, repetitions=1), Interrupted(different), target, resume=True)
+        moved = Path(self.tmp.name) / "moved.jsonl"
+        original.rename(moved)
+        _, rows = run(Config(pairs=1, repetitions=1), Interrupted(moved), target, resume=True)
+        self.assertTrue(all(r["score"]["provider_error"] for r in rows))
 
     def test_resume_requires_original_budget(self):
         class Bound(Oracle):
