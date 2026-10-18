@@ -125,12 +125,20 @@ class OpenAIProvider:
                 exc.close()
             if status in (401, 403):
                 self.terminal_http_status = status
-            self.budget.finish(reservation, http_status=status)
+            self.finish_request(reservation, http_status=status)
             raise ProviderHTTPError(status, code=code, error_type=error_type,
                                     request_id=request_id) from None
         parsed = self.parse_response(raw, request_id)
-        self.budget.finish(reservation, usage=parsed.get("usage"))
+        self.finish_request(reservation, usage=parsed.get("usage"))
         return parsed
+
+    def finish_request(self, reservation, **kwargs):
+        try:
+            self.budget.finish(reservation, **kwargs)
+        except BudgetError as exc:
+            # A local ledger failure after HTTP must not erase the attempted request.
+            exc.request_attempted = True
+            raise
 
 
 def safe_token(value):
@@ -150,6 +158,7 @@ def parse_response(raw, request_id):
                 refused = True
                 text.append(content.get("refusal", ""))
     return {"output": "".join(text), "provider_refusal": refused, "request_attempted": True,
+            "provider_failure": raw.get("status") in ("failed", "cancelled") or bool(raw.get("error")),
             "usage": raw.get("usage"), "response_id": raw.get("id"),
             "request_id": request_id, "returned_model": raw.get("model"),
             "response_status": raw.get("status"),

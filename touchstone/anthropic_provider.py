@@ -44,5 +44,6 @@ class AnthropicProvider(OpenAIProvider):
             usage = {**usage, "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0)}
         return {"output": "".join(c["text"] for c in raw.get("content", []) if c.get("type") == "text"),
                 "provider_refusal": raw.get("stop_reason") == "refusal", "request_attempted": True,
+                "provider_failure": raw.get("type") == "error",
                 "usage": usage, "response_id": raw.get("id"), "request_id": request_id,
                 "returned_model": raw.get("model"), "response_status": raw.get("stop_reason")}

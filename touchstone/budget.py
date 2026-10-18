@@ -95,7 +95,43 @@ class Budget:
                 raise BudgetError("budget ledger identity missing or damaged") from None
             if identity != getattr(self, "identity", identity):
                 raise BudgetError("budget ledger identity changed")
+        self.validate_records(records[1:])
         return records
+
+    def validate_records(self, records):
+        reservations = []
+        for record in records:
+            if not isinstance(record, dict):
+                raise BudgetError("damaged ledger record")
+            kind = record.get("kind")
+            if kind == "reservation":
+                identifier, bound, model = (record.get(k) for k in ("id", "input_token_bound", "model"))
+                if (type(identifier) is not int or identifier != len(reservations)
+                        or type(bound) is not int or not OVERHEAD_TOKENS <= bound <= 4096 + OVERHEAD_TOKENS
+                        or not isinstance(model, str) or model not in PRICES
+                        or (self.policy["model"] != "shared-priced-models-v1" and model != self.model)
+                        or not isinstance(record.get("trial_id"), str) or not record["trial_id"]):
+                    raise BudgetError("damaged reservation record")
+                expected = math.ceil(bound * PRICES[model][0] + self.policy["output_cap"] * PRICES[model][1])
+                if type(record.get("reserved_micro_usd")) is not int or record["reserved_micro_usd"] != expected:
+                    raise BudgetError("damaged reservation cost")
+                reservations.append(record)
+            elif kind == "usage":
+                identifier, usage, status = (record.get(k) for k in ("reservation_id", "usage", "http_status"))
+                if (type(identifier) is not int or not 0 <= identifier < len(reservations)
+                        or (status is not None and (type(status) is not int or not 100 <= status <= 599))
+                        or (usage is not None and (not isinstance(usage, dict)
+                            or any(k not in ("input_tokens", "output_tokens", "total_tokens")
+                                   or type(v) is not int or v < 0 for k, v in usage.items())))):
+                    raise BudgetError("damaged usage record")
+            elif kind == "terminal":
+                if record.get("http_status") not in (401, 403):
+                    raise BudgetError("damaged terminal record")
+            else:
+                raise BudgetError("unknown ledger record kind")
+        if (len(reservations) > self.policy["max_requests"]
+                or sum(r["reserved_micro_usd"] for r in reservations) > self.policy["budget_micro_usd"]):
+            raise BudgetError("ledger exceeds original limits")
 
     @staticmethod
     def append(stream, record):

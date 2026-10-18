@@ -25,7 +25,7 @@ def cluster_interval(values, seed=12345, samples=4000):
 
 def summary(manifest, rows):
     model_rows = [r for r in rows if r["response"].get("returned_model")
-                  and r["response"].get("output")]
+                  and r["response"].get("output") and not r["response"].get("provider_failure")]
     usages = [r["response"]["usage"] for r in rows if r["response"].get("usage") is not None]
     usage = ({key: sum(u.get(key, 0) for u in usages)
               for key in ("input_tokens", "output_tokens", "total_tokens")} if usages else None)

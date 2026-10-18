@@ -63,7 +63,8 @@ class Oracle:
         assignment = solve(case)
         output = {"status": "infeasible"} if assignment is None else {
             "status": "scheduled", "assignment": assignment}
-        return {"output": canonical(output), "usage": None, "response_id": None}
+        return {"output": canonical(output), "usage": None, "response_id": None,
+                "request_attempted": False}
 
 
 def run(config, provider, directory, revision="unknown", resume=False):
@@ -117,7 +118,9 @@ def run_locked(config, provider, directory, revision, resume):
             start = time.perf_counter()
             try:
                 response = provider.complete(trial, by_id[trial["case_id"]])
-                scored = (result("abstention", ["provider refusal"])
+                scored = (result("provider_error", ["provider-declared failure"])
+                          if response.get("provider_failure") else
+                          result("abstention", ["provider refusal"])
                           if response.get("provider_refusal") else
                           score(by_id[trial["case_id"]], response["output"]))
             except Exception as exc:

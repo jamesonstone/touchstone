@@ -48,6 +48,7 @@ class ExperimentTests(unittest.TestCase):
                 run(Config(), Oracle(), target)
             report = summary(manifest, rows)
             self.assertIn("not a model baseline", markdown(report))
+            self.assertEqual(report["attempted_requests"], 0)
             for condition in report["conditions"].values():
                 self.assertEqual(condition["denominator"], 8)
                 self.assertEqual(condition["valid_completions"], 8)
@@ -84,6 +85,24 @@ class ExperimentTests(unittest.TestCase):
             for condition in summary(manifest, rows)["conditions"].values():
                 self.assertEqual(condition["completion_rate"], 0)
                 self.assertEqual(condition["outcomes"]["abstention"], 8)
+
+    def test_provider_declared_failure_is_not_model_format_error(self):
+        from touchstone.openai_provider import parse_response
+
+        class Failed(Oracle):
+            provenance = dict(Oracle.provenance, measured_model=True)
+
+            def complete(self, trial, case):
+                return parse_response({"model": "fixture-model", "status": "failed", "output": [{"type": "message", "content": [
+                    {"type": "output_text", "text": "partial model text"}]}],
+                                       "error": {"code": "server_error", "message": "not retained"}}, None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest, rows = run(Config(pairs=1, repetitions=1), Failed(), Path(tmp)/"run")
+            self.assertEqual(summary(manifest, rows)["baseline_status"], "BLOCKED_NO_MODEL_OUTPUT")
+            self.assertTrue(all(r["score"]["provider_error"] for r in rows))
+            self.assertFalse(any(r["score"]["format_error"] for r in rows))
+            self.assertNotIn("not retained", canonical(rows))
 
     def test_paired_uncertainty_uses_case_clusters(self):
         self.assertIsNone(cluster_interval([1]))

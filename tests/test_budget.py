@@ -157,6 +157,22 @@ class BudgetTests(unittest.TestCase):
         _, rows = run(Config(pairs=1, repetitions=1), Interrupted(moved), target, resume=True)
         self.assertTrue(all(r["score"]["provider_error"] for r in rows))
 
+    def test_semantically_damaged_records_cannot_reduce_accounting(self):
+        budget = Budget(self.path, budget_cents=1)
+        for i in range(3):
+            budget.reserve(str(i), "x" * 4096)
+        original = [json.loads(s) for s in self.path.read_text().splitlines()]
+        variants = [("kind", "reservation_typo"), ("reserved_micro_usd", 0),
+                    ("reserved_micro_usd", -1), ("id", 4), ("input_token_bound", 1),
+                    ("model", "unknown-model"), ("trial_id", None)]
+        for key, value in variants:
+            with self.subTest(key=key, value=value):
+                damaged = [dict(r) for r in original]
+                damaged[1][key] = value
+                self.path.write_text("".join(json.dumps(r) + "\n" for r in damaged))
+                with self.assertRaises(BudgetError):
+                    Budget(self.path, budget_cents=1).reserve("extra", "x" * 4096)
+
     def test_resume_requires_original_budget(self):
         class Bound(Oracle):
             def bind_budget(self, directory):
