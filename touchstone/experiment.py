@@ -63,7 +63,8 @@ class Oracle:
         assignment = solve(case)
         output = {"status": "infeasible"} if assignment is None else {
             "status": "scheduled", "assignment": assignment}
-        return {"output": canonical(output), "usage": None, "response_id": None}
+        return {"output": canonical(output), "usage": None, "response_id": None,
+                "request_attempted": False}
 
 
 def run(config, provider, directory, revision="unknown", resume=False):
@@ -90,11 +91,17 @@ def run_locked(config, provider, directory, revision, resume):
     manifest["config_sha256"] = digest({"config": manifest["config"],
                                         "provider": manifest["provider"],
                                         "benchmark": FAMILY, "scorer": SCORER_VERSION})
+    if hasattr(provider, "bind_budget"):
+        ledger = provider.budget_path(directory) if hasattr(provider, "budget_path") else directory / "budget.jsonl"
+        if resume and not ledger.is_file():
+            raise ValueError("resume requires the original budget ledger")
+        provider.bind_budget(directory)
+        manifest["budget_ledger_id"] = provider.budget.identity
     rows = []
     if resume:
         saved = json.loads((directory / "manifest.json").read_text())
-        for key in ("config_sha256", "plan_sha256", "source_sha256"):
-            if saved[key] != manifest[key]:
+        for key in ("config_sha256", "plan_sha256", "source_sha256", "budget_ledger_id"):
+            if saved.get(key) != manifest.get(key):
                 raise ValueError("resume configuration, plan or source differs")
         manifest = saved
         rows = [json.loads(line) for line in (directory / "trials.jsonl").read_text().splitlines()]
@@ -105,17 +112,15 @@ def run_locked(config, provider, directory, revision, resume):
     else:
         (directory / "manifest.json").write_text(canonical(manifest) + "\n")
         (directory / "plan.json").write_text(canonical(trials) + "\n")
-    if hasattr(provider, "bind_budget"):
-        if resume and not (directory / "budget.jsonl").is_file():
-            raise ValueError("resume requires the original budget ledger")
-        provider.bind_budget(directory)
     with (directory / "trials.jsonl").open("a" if resume else "x") as stream:
         for sequence in range(len(rows), len(trials)):
             trial = trials[sequence]
             start = time.perf_counter()
             try:
                 response = provider.complete(trial, by_id[trial["case_id"]])
-                scored = (result("abstention", ["provider refusal"])
+                scored = (result("provider_error", ["provider-declared failure"])
+                          if response.get("provider_failure") else
+                          result("abstention", ["provider refusal"])
                           if response.get("provider_refusal") else
                           score(by_id[trial["case_id"]], response["output"]))
             except Exception as exc:

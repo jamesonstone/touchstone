@@ -25,7 +25,7 @@ def cluster_interval(values, seed=12345, samples=4000):
 
 def summary(manifest, rows):
     model_rows = [r for r in rows if r["response"].get("returned_model")
-                  and r["response"].get("output")]
+                  and r["response"].get("output") and not r["response"].get("provider_failure")]
     usages = [r["response"]["usage"] for r in rows if r["response"].get("usage") is not None]
     usage = ({key: sum(u.get(key, 0) for u in usages)
               for key in ("input_tokens", "output_tokens", "total_tokens")} if usages else None)
@@ -71,7 +71,8 @@ def summary(manifest, rows):
         "baseline_status": ("BLOCKED_NO_MODEL_OUTPUT" if manifest["provider"]["measured_model"]
                             and not model_rows else "RECORDED"),
         "usage": usage, "usage_reported_trials": len(usages),
-        "total_latency_seconds": sum(r["latency_seconds"] for r in rows),
+        "total_latency_seconds": (sum(r["latency_seconds"] for r in rows if r["latency_seconds"] is not None)
+                                  if any(r["latency_seconds"] is not None for r in rows) else None),
         "conditions": conditions, "paired": paired,
         "uncertainty": "Percentile case-cluster bootstrap, 4000 draws, seed 12345. "
         "Repeats are not independent cases. Tiny samples and degenerate intervals "

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "touchstone-bench"
+version = "0.1.0"
+description = "Jameson Stone's independent reproducible model benchmarks"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+touchstone = "touchstone.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["touchstone*"]

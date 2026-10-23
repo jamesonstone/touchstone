@@ -92,6 +92,21 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             OpenAIProvider()
 
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "unit-test-placeholder", "OPENAI_BASE_URL": ""})
+    def test_ledger_failure_after_response_preserves_attempted_flag(self):
+        from touchstone.budget import BudgetError
+        provider = OpenAIProvider()
+        provider.bind_budget(Path(self.tmp.name))
+
+        class Response(io.BytesIO):
+            headers = {}
+
+        provider.opener.open = lambda *args, **kwargs: Response(b'{"output":[],"status":"completed"}')
+        provider.budget.finish = lambda *args, **kwargs: (_ for _ in ()).throw(BudgetError("locked"))
+        with self.assertRaises(BudgetError) as context:
+            provider.complete({"trial_id": "fixture", "prompt": "synthetic"}, None)
+        self.assertTrue(context.exception.request_attempted)
+
     def test_explicit_provider_refusal_is_abstention(self):
         class Refused(Oracle):
             def complete(self, trial, case):
